@@ -1,16 +1,15 @@
 extern crate sdl3;
 
-use sdl3::pixels::Color;
 use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
 use sdl3::render::FRect;
 use std::time::Duration;
 
 // Game Variables
-const FRAMERATE: u32 = 0;
+const FRAMERATE: u32 = 60;
 
-const ARRAY_SIZE: (usize, usize) = (320, 240);
-const ARRAY_WINDOW_SCALE: usize = 4;
+const ARRAY_SIZE: (usize, usize) = (160, 120);
+const ARRAY_WINDOW_SCALE: usize = 8;
 
 #[derive(Copy, Clone, std::fmt::Debug)]
 pub enum Element {
@@ -18,6 +17,19 @@ pub enum Element {
     Sand,
     Water,
     Stone
+}
+
+pub fn move_cell(
+    arr: &mut [[Element; ARRAY_SIZE.0]; ARRAY_SIZE.1], 
+    col: usize, row: usize,
+    move_x: i32, move_y: i32
+) {
+    let move_row = ((row as i32)+move_y) as usize;
+    let move_col = ((col as i32)+move_x) as usize;
+
+    let temp = arr[move_row][move_col];
+    arr[move_row][move_col] = arr[row][col];
+    arr[row][col] = temp;
 }
 
 pub fn draw_square_terrain(
@@ -90,7 +102,7 @@ pub fn main() {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem.window(
-        "rust-sdl3 demo", 
+        "sand falling", 
         (ARRAY_SIZE.0 * ARRAY_WINDOW_SCALE) as u32, 
         (ARRAY_SIZE.1 * ARRAY_WINDOW_SCALE) as u32
     )
@@ -99,10 +111,8 @@ pub fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas();
-
-    canvas.set_draw_color(Color::RGB(0, 255, 255));
-    canvas.clear();
     canvas.present();
+
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     // Game Vars
@@ -121,8 +131,7 @@ pub fn main() {
 
     // A block of memory WE hold onto, bypassing the communication we'd have to do with the gpu using .with_lock()
     let mut matrix_texture_buffer = vec![0u8; ARRAY_SIZE.0 * ARRAY_SIZE.1 * 3];
-
-
+    
     let mut element_to_draw = Element::Sand;
     let mut brush_size = 1;
 
@@ -140,10 +149,10 @@ pub fn main() {
         let delta_ticks = current_counter_value - last_counter_value;
         
         let delta_time = delta_ticks as f64 / performance_frequency as f64;
+        println!("FPS: {}", 1.0 / delta_time);
 
         last_counter_value = current_counter_value;
 
-        println!("FPS: {}", 1.0 / delta_time);
 
         // Event Loop
         for event in event_pump.poll_iter() {
@@ -215,27 +224,32 @@ pub fn main() {
                     }
                     
                     if matches!(matrix[row_i+1][col_i], Element::Air) {
-                        let below = matrix[row_i+1][col_i];
-                        //Can go down
-                        //Swap elements
-                        matrix[row_i][col_i] = below;
-                        matrix[row_i+1][col_i] = cell;
+                        move_cell(&mut matrix, col_i, row_i, 0, 1);
                     } else {
                         //Can't go down! Panic!! 
                         //(Really, just check if bottom left then right is available. If so, swap to there!)
+
+                        //We must be able to go left/right before swapping with bottomleft/right.
                         
                         //bottom left
-                        if col_i > 0 && matches!(matrix[row_i+1][col_i-1], Element::Air) {
-                            let bottom_left = matrix[row_i+1][col_i-1];
-                            matrix[row_i][col_i] = bottom_left;
-                            matrix[row_i+1][col_i-1] = cell;
-                        }
+                        if col_i > 0 
+                            && matches!(matrix[row_i][col_i-1], Element::Air) 
+                            && matches!(matrix[row_i+1][col_i-1], Element::Air) 
+                        {
+                            move_cell(&mut matrix, col_i, row_i, -1, 1);
+                        }else
                         
                         //bottom right
-                        if col_i + 1 < ARRAY_SIZE.0 && matches!(matrix[row_i+1][col_i+1], Element::Air) {
-                            let bottom_right = matrix[row_i+1][col_i+1];
-                            matrix[row_i][col_i] = bottom_right;
-                            matrix[row_i+1][col_i+1] = cell;
+
+
+                        //TODO: make "cellAt", or even "cellEmpty"
+
+
+                        if col_i + 1 < ARRAY_SIZE.0 
+                            && matches!(matrix[row_i][col_i+1], Element::Air) 
+                            && matches!(matrix[row_i+1][col_i+1], Element::Air) 
+                        {
+                            move_cell(&mut matrix, col_i, row_i, 1, 1);
                         }
                     }
                 }
@@ -245,26 +259,29 @@ pub fn main() {
                     if row_i+1 > matrix.len(){
                         continue;
                     }
+
+                    // Water Logic: Go down,
+                    // Randomly move left or right till we hit a wall.
                     
+                    //Down
                     if matches!(matrix[row_i+1][col_i], Element::Air) {
                         let below = matrix[row_i+1][col_i];
                         matrix[row_i][col_i] = below;
                         matrix[row_i+1][col_i] = cell;
-                    } else {
-                        //Water: Can go left or right?
-                        //left
-                        if col_i > 0 && matches!(matrix[row_i][col_i-1], Element::Air) {
-                            let left = matrix[row_i][col_i-1];
-                            matrix[row_i][col_i] = left;
-                            matrix[row_i][col_i-1] = cell;
-                        }
+                    } else
                         
-                        //right
-                        if col_i + 1 < ARRAY_SIZE.0 && matches!(matrix[row_i][col_i+1], Element::Air) {
-                            let right = matrix[row_i][col_i+1];
-                            matrix[row_i][col_i] = right;
-                            matrix[row_i][col_i] = cell;
-                        }
+                    //left
+                    if col_i > 0 && matches!(matrix[row_i][col_i-1], Element::Air) {
+                        let left = matrix[row_i][col_i-1];
+                        matrix[row_i][col_i] = left;
+                        matrix[row_i][col_i-1] = cell;
+                    } 
+                    
+                    //ELSE right
+                    else if col_i + 1 < ARRAY_SIZE.0 && matches!(matrix[row_i][col_i+1], Element::Air) {
+                        let right: Element = matrix[row_i][col_i+1];
+                        matrix[row_i][col_i] = right;
+                        matrix[row_i][col_i+1] = cell;
                     }
                 }
             }   
@@ -298,7 +315,7 @@ pub fn main() {
         matrix_texture.update(
             None, 
             &matrix_texture_buffer, 
-            ARRAY_SIZE.0*3
+            ARRAY_SIZE.0*3 // 3 bytes for R, G, B
         ).unwrap();
 
 
