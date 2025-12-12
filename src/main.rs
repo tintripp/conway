@@ -12,13 +12,14 @@ const FRAMERATE: u32 = 60;
 const ARRAY_SIZE: (usize, usize) = (480, 360);
 const ARRAY_WINDOW_SCALE: usize = 3;
 
-#[derive(Copy, Clone, std::fmt::Debug)]
+#[derive(Copy, Clone, std::fmt::Debug, PartialEq, Eq)]
 pub enum Element {
     Air,
     Sand,
     Water,
     Lava,
-    Stone
+    Stone,
+    Grass
 }
 
 pub fn move_cell(
@@ -34,16 +35,27 @@ pub fn move_cell(
     arr[row][col] = temp;
 }
 
+pub fn cell_matches (
+    arr: &[[Element; ARRAY_SIZE.0]; ARRAY_SIZE.1], 
+    col: usize, row: usize,
+    elmnts: &[Element]
+) -> bool {
+    for elmnt in elmnts {
+        if (col as i32) >= 0 && col < ARRAY_SIZE.0
+        && (row as i32) >= 0 && row < ARRAY_SIZE.1 
+        && arr[row][col] == *elmnt{
+            return true;
+        }
+    }
+    return false;
+
+}
+
 pub fn is_cell_empty (
     arr: &[[Element; ARRAY_SIZE.0]; ARRAY_SIZE.1], 
     col: usize, row: usize
 ) -> bool {
-    if (col as i32) >= 0 && col < ARRAY_SIZE.0
-    && (row as i32) >= 0 && row < ARRAY_SIZE.1 {
-        matches!(arr[row][col], Element::Air)
-    }else{
-        false
-    }
+    cell_matches(arr, col, row, &[Element::Air])
 
 }
 
@@ -160,6 +172,7 @@ pub fn main() {
     let mut rng = rand::rng();
 
     let lava_tick_speed = 3;
+    let sand_sink_tick_speed = 20;
 
     'running: loop {
         let frame_start = std::time::Instant::now();
@@ -168,7 +181,7 @@ pub fn main() {
         let delta_ticks = current_counter_value - last_counter_value;
         
         let delta_time = delta_ticks as f64 / performance_frequency as f64;
-        //println!("FPS: {}", 1.0 / delta_time);
+        println!("FPS: {}", 1.0 / delta_time);
 
         last_counter_value = current_counter_value;
 
@@ -192,6 +205,7 @@ pub fn main() {
                 Event::KeyDown { keycode: Some(Keycode::_2), .. } => element_to_draw = Element::Water,
                 Event::KeyDown { keycode: Some(Keycode::_3), .. } => element_to_draw = Element::Stone,
                 Event::KeyDown { keycode: Some(Keycode::_4), .. } => element_to_draw = Element::Lava,
+                Event::KeyDown { keycode: Some(Keycode::_5), .. } => element_to_draw = Element::Grass,
                 Event::KeyDown { keycode: Some(Keycode::_0), .. } => element_to_draw = Element::Air,
 
 
@@ -241,7 +255,15 @@ pub fn main() {
                         continue;
                     }
                     
-                    if is_cell_empty(&matrix, col_i, row_i + 1) {
+                    if cell_matches(&matrix, col_i, row_i + 1, &[Element::Air, Element::Water, Element::Lava]) {
+                        if cell_matches(&matrix, col_i, row_i + 1, &[Element::Water, Element::Lava]){
+
+                            if sdl3::timer::ticks() % sand_sink_tick_speed>0{
+                                continue;
+                            }
+
+                        }
+                        
                         move_cell(&mut matrix, col_i, row_i, 0, 1);
                     } else {
                         //check if bottom left then right is available. If so, swap to there!
@@ -335,11 +357,12 @@ pub fn main() {
                 let offset = (y * ARRAY_SIZE.0 + x) * 3;
 
                 let (r,g,b) = match matrix[y][x] {
-                    Element::Sand => (255,255,64),
-                    Element::Water => (64,128,255),
+                    Element::Sand => (255,255,0),
+                    Element::Water => (0,0,255),
                     Element::Lava => (255,0,0),
-                    Element::Stone => (128,128,128),
-                    _ => (64,64,64)
+                    Element::Grass => (0,255,85),
+                    Element::Stone => (0,0,0),
+                    _ => (102,102,102)
                 };
 
                 matrix_texture_buffer[offset] = r;
