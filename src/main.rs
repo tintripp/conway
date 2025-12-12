@@ -4,6 +4,7 @@ use sdl3::event::Event;
 use sdl3::keyboard::Keycode;
 use sdl3::render::FRect;
 use std::time::Duration;
+use rand::Rng;
 
 // Game Variables
 const FRAMERATE: u32 = 60;
@@ -16,6 +17,7 @@ pub enum Element {
     Air,
     Sand,
     Water,
+    Lava,
     Stone
 }
 
@@ -30,6 +32,19 @@ pub fn move_cell(
     let temp = arr[move_row][move_col];
     arr[move_row][move_col] = arr[row][col];
     arr[row][col] = temp;
+}
+
+pub fn is_cell_empty (
+    arr: &[[Element; ARRAY_SIZE.0]; ARRAY_SIZE.1], 
+    col: usize, row: usize
+) -> bool {
+    if (col as i32) >= 0 && col < ARRAY_SIZE.0
+    && (row as i32) >= 0 && row < ARRAY_SIZE.1 {
+        matches!(arr[row][col], Element::Air)
+    }else{
+        false
+    }
+
 }
 
 pub fn draw_square_terrain(
@@ -142,6 +157,8 @@ pub fn main() {
     let performance_frequency = sdl3::timer::performance_frequency();
     let mut last_counter_value = sdl3::timer::performance_counter();
 
+    let mut rng = rand::rng();
+
     'running: loop {
         let frame_start = std::time::Instant::now();
 
@@ -149,7 +166,7 @@ pub fn main() {
         let delta_ticks = current_counter_value - last_counter_value;
         
         let delta_time = delta_ticks as f64 / performance_frequency as f64;
-        println!("FPS: {}", 1.0 / delta_time);
+        //println!("FPS: {}", 1.0 / delta_time);
 
         last_counter_value = current_counter_value;
 
@@ -223,31 +240,24 @@ pub fn main() {
                         continue;
                     }
                     
-                    if matches!(matrix[row_i+1][col_i], Element::Air) {
+                    if is_cell_empty(&matrix, col_i, row_i + 1) {
                         move_cell(&mut matrix, col_i, row_i, 0, 1);
                     } else {
-                        //Can't go down! Panic!! 
-                        //(Really, just check if bottom left then right is available. If so, swap to there!)
-
+                        //check if bottom left then right is available. If so, swap to there!
                         //We must be able to go left/right before swapping with bottomleft/right.
                         
                         //bottom left
                         if col_i > 0 
-                            && matches!(matrix[row_i][col_i-1], Element::Air) 
-                            && matches!(matrix[row_i+1][col_i-1], Element::Air) 
+                            && is_cell_empty(&matrix, col_i - 1, row_i)
+                            && is_cell_empty(&matrix, col_i - 1, row_i + 1)
                         {
                             move_cell(&mut matrix, col_i, row_i, -1, 1);
                         }else
                         
                         //bottom right
-
-
-                        //TODO: make "cellAt", or even "cellEmpty"
-
-
                         if col_i + 1 < ARRAY_SIZE.0 
-                            && matches!(matrix[row_i][col_i+1], Element::Air) 
-                            && matches!(matrix[row_i+1][col_i+1], Element::Air) 
+                            && is_cell_empty(&matrix, col_i + 1, row_i)
+                            && is_cell_empty(&matrix, col_i + 1, row_i + 1)
                         {
                             move_cell(&mut matrix, col_i, row_i, 1, 1);
                         }
@@ -255,33 +265,37 @@ pub fn main() {
                 }
 
                 if matches!(cell, Element::Water){
+                    // TODO: liquids seem "biased", and this is ENTIRELY because
+                    //         currently the array is writing as it reads through.
+
+
                     //Try go down
                     if row_i+1 > matrix.len(){
                         continue;
                     }
+                    
+                    if is_cell_empty(&matrix, col_i, row_i + 1) {
+                        move_cell(&mut matrix, col_i, row_i, 0, 1);
+                    } else {
+                        //pick randomly either left or right to move
+                        let direction: i32 = (rng.random_range(0..=1) * 2) - 1;
 
-                    // Water Logic: Go down,
-                    // Randomly move left or right till we hit a wall.
-                    
-                    //Down
-                    if matches!(matrix[row_i+1][col_i], Element::Air) {
-                        let below = matrix[row_i+1][col_i];
-                        matrix[row_i][col_i] = below;
-                        matrix[row_i+1][col_i] = cell;
-                    } else
-                        
-                    //left
-                    if col_i > 0 && matches!(matrix[row_i][col_i-1], Element::Air) {
-                        let left = matrix[row_i][col_i-1];
-                        matrix[row_i][col_i] = left;
-                        matrix[row_i][col_i-1] = cell;
-                    } 
-                    
-                    //ELSE right
-                    else if col_i + 1 < ARRAY_SIZE.0 && matches!(matrix[row_i][col_i+1], Element::Air) {
-                        let right: Element = matrix[row_i][col_i+1];
-                        matrix[row_i][col_i] = right;
-                        matrix[row_i][col_i+1] = cell;
+                        //Speed: For example, water flattens out faster than lava.
+                        let mut speed = 1;
+                        if matches!(cell, Element::Water){
+                            speed = 12;
+                        }
+
+                        if (col_i as i32) >= 0 && col_i < ARRAY_SIZE.0  {
+                            let mut max_i_can_go = 0;
+                            for i in 0..=speed{
+                                if is_cell_empty(&matrix, ((col_i as i32) + (i * direction)) as usize, row_i) {
+                                    max_i_can_go = i;
+                                    break;
+                                }
+                            }
+                            move_cell(&mut matrix, col_i, row_i, /*max_i_can_go */ direction, 0);
+                        }
                     }
                 }
             }   
