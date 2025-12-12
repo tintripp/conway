@@ -189,7 +189,11 @@ pub fn main() {
                 Event::KeyDown { keycode: Some(Keycode::_1), .. } => element_to_draw = Element::Sand,
                 Event::KeyDown { keycode: Some(Keycode::_2), .. } => element_to_draw = Element::Water,
                 Event::KeyDown { keycode: Some(Keycode::_3), .. } => element_to_draw = Element::Stone,
+                Event::KeyDown { keycode: Some(Keycode::_4), .. } => element_to_draw = Element::Lava,
                 Event::KeyDown { keycode: Some(Keycode::_0), .. } => element_to_draw = Element::Air,
+
+
+                Event::KeyDown { keycode: Some(Keycode::Space), .. } => draw_square_terrain(&mut matrix, Element::Water, 1, 0, 0),
 
                 _ => {}
             }
@@ -206,12 +210,7 @@ pub fn main() {
                 elmnt = Element::Air;
             }
 
-            if old_mx == -1 || old_my == -1 {
-                /*draw_square_terrain(
-                    &mut matrix, elmnt, brush_size, 
-                    old_mx, old_my
-                );*/
-            }else{
+            if old_mx != -1 && old_my != -1 {
                 draw_square_terrain_line(
                     &mut matrix, elmnt, brush_size, 
                     old_mx, old_my, 
@@ -276,25 +275,16 @@ pub fn main() {
                     
                     if is_cell_empty(&matrix, col_i, row_i + 1) {
                         move_cell(&mut matrix, col_i, row_i, 0, 1);
-                    } else {
+                    } 
+                    
+                    else {
                         //pick randomly either left or right to move
                         let direction: i32 = (rng.random_range(0..=1) * 2) - 1;
 
-                        //Speed: For example, water flattens out faster than lava.
-                        let mut speed = 1;
-                        if matches!(cell, Element::Water){
-                            speed = 12;
-                        }
-
                         if (col_i as i32) >= 0 && col_i < ARRAY_SIZE.0  {
-                            let mut max_i_can_go = 0;
-                            for i in 0..=speed{
-                                if is_cell_empty(&matrix, ((col_i as i32) + (i * direction)) as usize, row_i) {
-                                    max_i_can_go = i;
-                                    break;
-                                }
+                            if is_cell_empty(&matrix, ((col_i as i32) + direction) as usize, row_i) {
+                                move_cell(&mut matrix, col_i, row_i, direction, 0);
                             }
-                            move_cell(&mut matrix, col_i, row_i, /*max_i_can_go */ direction, 0);
                         }
                     }
                 }
@@ -316,6 +306,7 @@ pub fn main() {
                 let (r,g,b) = match matrix[y][x] {
                     Element::Sand => (255,255,64),
                     Element::Water => (64,128,255),
+                    Element::Lava => (255,0,0),
                     Element::Stone => (128,128,128),
                     _ => (64,64,64)
                 };
