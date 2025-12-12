@@ -9,8 +9,8 @@ use rand::Rng;
 // Game Variables
 const FRAMERATE: u32 = 60;
 
-const ARRAY_SIZE: (usize, usize) = (160, 120);
-const ARRAY_WINDOW_SCALE: usize = 8;
+const ARRAY_SIZE: (usize, usize) = (480, 360);
+const ARRAY_WINDOW_SCALE: usize = 3;
 
 #[derive(Copy, Clone, std::fmt::Debug)]
 pub enum Element {
@@ -159,6 +159,8 @@ pub fn main() {
 
     let mut rng = rand::rng();
 
+    let lava_tick_speed = 3;
+
     'running: loop {
         let frame_start = std::time::Instant::now();
 
@@ -263,10 +265,13 @@ pub fn main() {
                     }
                 }
 
-                if matches!(cell, Element::Water){
+                if matches!(cell, Element::Water) || matches!(cell, Element::Lava){
                     // TODO: liquids seem "biased", and this is ENTIRELY because
                     //         currently the array is writing as it reads through.
 
+                    if matches!(cell, Element::Lava) && sdl3::timer::ticks() % lava_tick_speed>0{
+                        continue;
+                    }
 
                     //Try go down
                     if row_i+1 > matrix.len(){
@@ -287,6 +292,32 @@ pub fn main() {
                             }
                         }
                     }
+
+                    if matches!(cell, Element::Water){
+
+                        for check_around_r in 0..=1{
+                            let check_around_r: i32 = check_around_r * 2 - 1;
+                            for check_around_c in 0..=1{
+                                let check_around_c: i32 = check_around_c * 2 - 1;
+
+                                let check_around_r = ((row_i as i32)+check_around_r) as usize;
+                                let check_around_c = ((col_i as i32)+check_around_c) as usize;
+
+                                if (check_around_r as i32) < 0 || check_around_r >= ARRAY_SIZE.1 
+                                || (check_around_c as i32) < 0 || check_around_c >= ARRAY_SIZE.0{
+                                    continue;
+                                }
+
+                                if matches!(matrix[check_around_r][check_around_c], Element::Lava) {
+                                    matrix[row_i][col_i] = Element::Stone;
+                                } 
+                            }
+                        
+                        }
+
+
+                    }
+
                 }
             }   
         }
